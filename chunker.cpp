@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <cstring>
 
+//!
+//! /
+//!
 template<typename T>
 class Chunk
 {
