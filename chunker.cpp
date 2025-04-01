@@ -4,9 +4,10 @@
 #include <algorithm>
 #include <cstring>
 
-//!
-//! /
-//!
+//
+// Класс - доступ к которому предоставляет итератор
+//   Тут мы обращаемся к данным и обновляем их
+//
 template<typename T>
 class Chunk
 {
@@ -18,6 +19,10 @@ public:
     {
     }
 
+    //
+    // Обновление данных. Если вся работа велась указателем на константный массив
+    //   то не соберется именно тут
+    //
     bool copyFrom(const char *value, const size_t value_size)
     {         
         if (!value || !m_data)
@@ -27,23 +32,27 @@ public:
         return true;
     }
 
+    //
+    // Двигаем блок по области памяти. Хоть внутренние переменные и меняются
+    //    данные остаются неизменными
+    //
     void move_chunk(const size_t chunk_offset, const size_t chunk_size) const
     {
         m_size = chunk_size;
         m_offset = chunk_offset;
     }
 
-    const char *data() const 
+    const char *data() const
     { 
         return reinterpret_cast<const char *>(m_data + m_offset); 
     }
 
-    size_t size() const 
+    size_t size() const
     { 
         return m_size; 
     }
 
-    size_t offset() const 
+    size_t offset() const
     { 
         return m_offset; 
     }
@@ -54,8 +63,12 @@ private:
     mutable size_t m_offset{0};
 };
 
+
+//
+// Сам итератор
+//
 template<typename T>
-class ChunkerIterator
+class ChunkIterator
 {
 public:
     using chunk_type = Chunk<T>;    
@@ -65,7 +78,7 @@ public:
     using pointer = chunk_type*;
     using reference = chunk_type&;
 
-    ChunkerIterator(T *data, const size_t data_size, const size_t chunk_offset, const size_t chunk_size):
+    ChunkIterator(T *data, const size_t data_size, const size_t chunk_offset, const size_t chunk_size):
         m_data(data),
         m_data_size(data_size),
         m_chunk_size(chunk_size),
@@ -73,15 +86,17 @@ public:
     {
     }    
 
-    ChunkerIterator &operator++() 
+    ChunkIterator &operator++()
     {
         const auto new_offset = m_chunk.offset() + m_chunk_size;
-        const auto new_size = std::min(m_data_size - new_offset, m_chunk_size);
+        size_t new_size = 0;
+        if (new_offset < m_data_size)
+            new_size = std::min(m_data_size - new_offset, m_chunk_size);
         m_chunk.move_chunk(new_offset, new_size);
         return *this;
     }
 
-    bool operator==(const ChunkerIterator &other) const
+    bool operator==(const ChunkIterator &other) const
     {
         if ((m_data != other.m_data) || m_data_size != other.m_data_size)
             return false;
@@ -92,12 +107,12 @@ public:
         return (m_chunk.data() == other.m_chunk.data()) && (m_chunk.size() == other.m_chunk.size());        
     }
 
-    bool operator!=(const ChunkerIterator &other) const 
+    bool operator!=(const ChunkIterator &other) const
     {
         return !(*this == other);
     }
 
-    reference operator*() 
+    reference operator*()
     { 
         return m_chunk;
     }
@@ -119,17 +134,24 @@ private:
     size_t m_chunk_size{0};
 };
 
+//
+// Контейнер-чанкер.
+//
 template <typename T>
 class Chunker
 {
 public:
     using char_type = typename std::conditional<std::is_const<T>::value, const char, char>::type;
-    using iterator = ChunkerIterator<char_type>;
-    using const_iterator = ChunkerIterator<const char_type>;
+    using value_type = Chunk<char_type>;
+    using iterator = ChunkIterator<char_type>;
+    using const_iterator = ChunkIterator<const char_type>;
 
+    //
+    // Размеры данных и чанка - в байтах
+    //
     Chunker(T *data, const size_t data_size, const size_t chunk_size):
         m_data(reinterpret_cast<char_type *>(data)),
-        m_data_size(data_size * sizeof(T)),
+        m_data_size(data_size),
         m_chunk_size(chunk_size)
     {
     }
@@ -144,11 +166,17 @@ public:
         return iterator(m_data, m_data_size, m_data_size, m_chunk_size);
     }
 
+    //
+    // Возвращает итератор по номеру чанка
+    //
     iterator at(const size_t index)
     {
         return iterator(m_data, m_data_size, m_chunk_size * index, m_chunk_size);
     }
 
+    //
+    // Возвращаем итератор просто по сдвигу в байтах
+    //
     iterator at_offset(const size_t offset)
     {
         return iterator(m_data, m_data_size, offset, m_chunk_size);
@@ -164,11 +192,17 @@ public:
         return const_iterator(m_data, m_data_size, m_data_size, m_chunk_size);
     }
 
+    //
+    // Возвращает итератор по номеру чанка
+    //
     const_iterator at(const size_t index) const
     {
         return const_iterator(m_data, m_data_size, m_chunk_size * index, m_chunk_size);
     }
 
+    //
+    // Возвращаем итератор просто по сдвигу в байтах
+    //
     const_iterator at_offset(const size_t offset) const
     {
         return const_iterator(m_data, m_data_size, offset, m_chunk_size);
@@ -184,15 +218,15 @@ int main() {
     static const size_t CHUNK_SIZE = 4;
 
     // int32_t type version
-    const int32_t dbl[] = {0,1,2,3,4,5,6,7,8,9,10,11,122,42,325*100};
-    auto ch = Chunker(dbl, (sizeof(dbl) / sizeof(dbl[0])), CHUNK_SIZE);
+    const int32_t dbl[] = {0,1,2,3,4,5,6,7,8,9,10,11,122,42,251*100};
+    auto ch = Chunker(dbl, sizeof(dbl), CHUNK_SIZE);
     std::cout << "Integer array: " << dbl << std::endl;
     for (auto &item: ch) {
         // char newText[CHUNK_SIZE + 1] = "777";
         // item.copyFrom(newText, CHUNK_SIZE);
         std::cout << std::to_string(item.offset()) << ":" << std::to_string(item.size()) << ": \"";
         for (size_t i = 0; i < item.size(); ++i) 
-            std::cout << std::setbase(16) << " " << std::setw(2) << std::setfill('0') << static_cast<int32_t>(item.data()[i]);
+            std::cout << std::setbase(16) << " " << std::setw(2) << std::setfill('0') << static_cast<int32_t>(item.data()[i] & 0xff);
         std::cout << "\"" << std::endl;
     }
     std::cout << std::endl;
