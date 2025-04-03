@@ -2,8 +2,9 @@
 
 Тут лежит `Makefile` и можно собрать пример командой `make [SOME_NAME]`.
 Где `SOME_NAME` может быть:
-    - chunker
-    - regex_replacer
+
+- chunker
+- regex_replacer
 
 Если не указать ничего - соберется все. Очистить результаты - `make clean`
 
