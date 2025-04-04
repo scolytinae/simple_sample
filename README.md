@@ -3,8 +3,8 @@
 Тут лежит `Makefile` и можно собрать пример командой `make [SOME_NAME]`.
 Где `SOME_NAME` может быть:
 
-- chunker
-- regex_replacer
+- [chunker](./chunker.cpp)
+- [regex_replacer](./regex_replacer.cpp)
 
 Если не указать ничего - соберется все. Очистить результаты - `make clean`
 
